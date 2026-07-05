@@ -1,32 +1,48 @@
+"""
+test_live_rgb.py
+
+Display a live RGB stream from the OAK-D Lite.
+"""
+
 import cv2
 
 from camera.camera_manager import CameraManager
 
 
-camera = CameraManager()
+def main():
 
-camera.start()
+    camera = CameraManager()
 
-print("Press Q to quit.")
+    print("Starting camera...")
 
-try:
+    camera.start()
 
-    while True:
+    print("Press 'Q' to quit.\n")
 
-        frame = camera.get_rgb_frame()
+    try:
 
-        if frame is None:
-            continue
+        while True:
 
-        cv2.imshow("OAK-D Lite RGB", frame)
+            frame = camera.get_rgb_frame()
 
-        key = cv2.waitKey(1)
+            if frame is None:
+                continue
 
-        if key == ord("q"):
-            break
+            cv2.imshow("OAK-D Lite RGB", frame)
 
-finally:
+            key = cv2.waitKey(1) & 0xFF
 
-    camera.stop()
+            if key == ord("q"):
+                break
 
-    cv2.destroyAllWindows()
+    finally:
+
+        print("Stopping camera...")
+
+        camera.stop()
+
+        cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
