@@ -1,10 +1,9 @@
 """
 vision/object_detector.py
-Pure object detector.
-Takes RGB frame, returns list of DetectedObject.
-No DepthAI or CameraManager knowledge.
+Abstract base class for object detectors.
 """
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional
 import numpy as np
@@ -23,50 +22,28 @@ class DetectedObject:
     label: str
     confidence: float
     bbox: BoundingBox
+
+    # Navigation metadata
+    center_x: int = 0
+    center_y: int = 0
+    region: str = "CENTER"   # LEFT, CENTER, RIGHT
+    area: int = 0
     distance: Optional[float] = None
 
 
-class ObjectDetector:
+class ObjectDetector(ABC):
     """
-    Pure vision detector.
+    Abstract base class for all object detectors.
     """
 
-    def __init__(self):
-        self.loaded = False
-
+    @abstractmethod
     def load_model(self) -> None:
         """Load the detection model."""
-        print("[ObjectDetector] Loading model...")
-        # Placeholder for real model loading
-        self.loaded = True
-        print("[ObjectDetector] Model loaded.")
+        pass
 
+    @abstractmethod
     def detect(self, frame: np.ndarray) -> List[DetectedObject]:
         """
         Detect objects in RGB frame.
-
-        Args:
-            frame: RGB image as numpy array (H, W, 3)
-
-        Returns:
-            List of detected objects.
         """
-        if not self.loaded:
-            raise RuntimeError(
-                "Model has not been loaded. Call load_model() first."
-            )
-
-        # Placeholder detections for now
-        detections = []
-
-        if frame is not None:
-            h, w = frame.shape[:2]
-            detections.append(
-                DetectedObject(
-                    label="person",
-                    confidence=0.88,
-                    bbox=BoundingBox(x1=w//4, y1=h//4, x2=3*w//4, y2=3*h//4)
-                )
-            )
-
-        return detections
+        pass
