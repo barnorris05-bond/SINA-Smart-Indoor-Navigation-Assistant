@@ -1,0 +1,2 @@
+cd C:\Development\Python-Projects\Smart-Navigation-Assistant
+.\.venv\Scripts\Activate.ps1

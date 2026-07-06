@@ -8,6 +8,7 @@ Using official DepthAI v3 API patterns.
 import depthai as dai
 from .rgb import RGBCamera
 from .depth import DepthCamera
+from config.camera import RGB_WIDTH, RGB_HEIGHT, RGB_FPS, QUEUE_SIZE, BLOCKING_QUEUE
 from typing import Any, Optional
 
 # ==========================================================
@@ -112,26 +113,25 @@ class CameraManager:
             self.pipeline.start()
 
     def _initialize_streams(self) -> None:
-        """Initialize RGB output stream using official DepthAI v3 API."""
+        """Initialize RGB output stream using centralized config."""
         self.log("Initializing streams...")
 
         self.rgb_stream = self.camera.requestOutput(
-            size=(1280, 720),
+            size=(RGB_WIDTH, RGB_HEIGHT),
             type=dai.ImgFrame.Type.BGR888p,
-            fps=30
+            fps=RGB_FPS
         )
 
-        # Diagnostic log to confirm this code is running
         self.log("Creating MessageQueue...")
 
         rgb_queue = self.rgb_stream.createOutputQueue(
-            maxSize=4,
-            blocking=False
+            maxSize=QUEUE_SIZE,
+            blocking=BLOCKING_QUEUE
         )
 
         self.rgb.set_queue(rgb_queue)
 
-        self.log("RGB stream initialized (low-latency mode).")
+        self.log(f"RGB stream initialized: {RGB_WIDTH}x{RGB_HEIGHT} @ {RGB_FPS} FPS")
 
     # ======================================================
     # Frame Access
