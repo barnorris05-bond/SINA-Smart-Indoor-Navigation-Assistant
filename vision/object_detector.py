@@ -32,6 +32,11 @@ class DetectedObject:
     area: int = 0
     priority: int = 0
     distance: Optional[float] = None
+    # Distance provenance (Phase B): how `distance` came to exist.
+    # One of "MEASURED" | "SIMULATED" | "UNAVAILABLE" | "STALE".
+    # SIMULATED values are mock data and must never be read as real.
+    distance_provenance: str = "UNAVAILABLE"
+    distance_source: Optional[str] = None  # provider id, e.g. "mock_scenario"
     
     # Object Tracking Integration Hook
     track_id: Optional[int] = None  # None indicates tracking inactive or unassigned

@@ -29,7 +29,11 @@ def draw_boxes(frame: np.ndarray, detections: List[DetectedObject]) -> np.ndarra
             f"{det.region}"
         ]
         if det.distance is not None:
-            text_lines.append(f"{det.distance:.2f} m")
+            # Honest UI: mock/simulated values are visibly labeled.
+            if getattr(det, "distance_provenance", None) == "SIMULATED":
+                text_lines.append(f"{det.distance:.2f} m (MOCK)")
+            else:
+                text_lines.append(f"{det.distance:.2f} m")
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.45

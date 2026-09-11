@@ -3,7 +3,7 @@ navigation/navigator.py
 Policy decision engine that interprets factual spatial maps using strict semantic configurations.
 """
 
-from typing import List
+from typing import List, Optional
 from vision.object_detector import DetectedObject
 from config.navigation import NAVIGATION_OBSTACLES, CRITICAL_PRIORITY_THRESHOLD
 from .navigation_types import NavigationAction
@@ -12,10 +12,14 @@ from .scene_analyzer import SceneAnalyzer
 
 class NavigationDecision:
     """Structured resolution profile explaining chosen policies."""
-    def __init__(self, action: NavigationAction, reason: str, priority: int = 0):
+    def __init__(self, action: NavigationAction, reason: str, priority: int = 0,
+                 trigger: Optional[DetectedObject] = None):
         self.action = action
         self.reason = reason
         self.priority = priority
+        # Object that caused this decision (None = scene-level, e.g. clear path).
+        # Used by the audio subsystem for context-aware announcements.
+        self.trigger = trigger
 
 
 class Navigator:
@@ -49,13 +53,15 @@ class Navigator:
                 return NavigationDecision(
                     action=NavigationAction.STOP,
                     reason=f"{top_center.label.capitalize()} blocking CENTER",
-                    priority=top_center.priority
+                    priority=top_center.priority,
+                    trigger=top_center
                 )
             else:
                 return NavigationDecision(
                     action=NavigationAction.SLOW_DOWN,
                     reason=f"Low-impact {top_center.label.lower()} in center",
-                    priority=top_center.priority
+                    priority=top_center.priority,
+                    trigger=top_center
                 )
 
         # Step 2: Clear center lane allows safe evaluation of peripheral threats
@@ -65,7 +71,8 @@ class Navigator:
                 return NavigationDecision(
                     action=NavigationAction.MOVE_RIGHT,
                     reason=f"{top_left.label.capitalize()} hazard on LEFT",
-                    priority=top_left.priority
+                    priority=top_left.priority,
+                    trigger=top_left
                 )
 
         if scene.right_objects:
@@ -74,7 +81,8 @@ class Navigator:
                 return NavigationDecision(
                     action=NavigationAction.MOVE_LEFT,
                     reason=f"{top_right.label.capitalize()} hazard on RIGHT",
-                    priority=top_right.priority
+                    priority=top_right.priority,
+                    trigger=top_right
                 )
 
         return NavigationDecision(
