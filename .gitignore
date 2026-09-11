@@ -36,3 +36,9 @@ dist/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Freebuff tooling workspace
+.freebuff/
+
+# Generated test artifacts
+test_camera.jpg
