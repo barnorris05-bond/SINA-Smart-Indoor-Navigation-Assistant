@@ -58,6 +58,8 @@ class DetectionManager:
                     region=region,
                     priority=priority,
                     distance=det.distance,
+                    distance_provenance=det.distance_provenance,
+                    distance_source=det.distance_source,
                     track_id=det.track_id
                 )
             )
