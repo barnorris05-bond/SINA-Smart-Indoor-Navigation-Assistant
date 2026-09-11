@@ -8,7 +8,10 @@ import numpy as np
 from camera.camera_manager import CameraManager
 from vision.yolo_detector import YOLODetector
 from vision.detection_manager import DetectionManager
-from navigation.navigator import Navigator
+from vision.object_tracker import ObjectTracker
+from navigation.distance_navigator import DistanceNavigator
+from depth.provider_factory import create_distance_fusion
+from audio import AudioManager
 from vision.drawing import draw_boxes, draw_fps, draw_center_marker, draw_regions
 from utils.fps import FPS
 
@@ -19,7 +22,17 @@ def main():
     camera = CameraManager()
     detector = YOLODetector()
     manager = DetectionManager()
-    navigator = Navigator()   
+    # One tracker for the whole application lifetime (Phase 5):
+    # persistent track_ids across frames; detection order independent.
+    tracker = ObjectTracker()
+    # Distance-aware policy: falls back to the legacy spatial Navigator
+    # whenever no usable distance exists (identical behavior then).
+    navigator = DistanceNavigator()
+    audio = AudioManager()
+    # Phase B: mock depth provider (SIMULATED distances) until real
+    # stereo is validated; swap happens in depth/provider_factory.py.
+    fusion = create_distance_fusion()
+    fusion.start()
     fps_counter = FPS()
 
     detector.load_model()
@@ -33,7 +46,11 @@ def main():
             frame = np.zeros((720, 1280, 3), dtype=np.uint8)
             raw_detections = detector.detect(frame)
             detections = manager.process(raw_detections, frame.shape[1])
+            detections = tracker.update(detections)
+            fusion.update()  # provider frame refresh (no-op for mocks)
+            fusion.fuse(detections, frame.shape[:2])
             decision = navigator.decide(detections)
+            audio.update(decision)
 
             frame = draw_regions(frame)
             frame = draw_boxes(frame, detections)
@@ -47,8 +64,11 @@ def main():
             cv2.imshow("SINA (Camera Offline)", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 running = False
+        audio.shutdown()
+        fusion.stop()
         return
 
+    audio.start()
     print("System ready. Press 'q' to quit.")
 
     try:
@@ -57,7 +77,11 @@ def main():
             if frame is not None:
                 raw_detections = detector.detect(frame)
                 detections = manager.process(raw_detections, frame.shape[1])
+                detections = tracker.update(detections)
+                fusion.update()  # provider frame refresh (no-op for mocks)
+                fusion.fuse(detections, frame.shape[:2])
                 decision = navigator.decide(detections)
+                audio.update(decision)
 
                 frame = draw_regions(frame)
                 frame = draw_boxes(frame, detections)
@@ -75,6 +99,8 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
     finally:
+        audio.shutdown()
+        fusion.stop()
         camera.stop()
         cv2.destroyAllWindows()
         print("SINA stopped gracefully.")
