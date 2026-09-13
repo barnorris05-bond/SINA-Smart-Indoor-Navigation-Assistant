@@ -4,6 +4,29 @@ All notable changes to the Smart Indoor Navigation Assistant (SINA) project will
 
 ---
 
+## - 2026-09-13 (Phase 6 — Motion / Approach Estimation)
+### Added
+- **MotionEstimator** (`vision/motion_estimator.py`): per-track temporal classification of distance behavior — `APPROACHING / STATIONARY / RECEDING / UNKNOWN` plus `closing_rate_mps` (positive = distance decreasing = approaching). Dedicated module: no motion logic in tracker, fusion, navigation or audio; no risk logic (Phase 7).
+- **Distance history with validity gating** (`config/motion.py`): per-track samples (timestamp, distance, provenance); only MEASURED/SIMULATED distances with positive values enter history — `None`/UNAVAILABLE/STALE never become motion evidence, and valid streams are not poisoned by stale frames.
+- **Two-half median rate filter**: the estimation window is split into first/second halves; rate = (median distance of first half − median of second half) / (median timestamp difference). Medians reject single-frame depth outliers deterministically; half-center pairing has no lag bias for linear motion.
+- **Hysteresis bands**: switches INTO APPROACHING/STATIONARY/RECEDING only when the estimated rate is inside that band; dead-zone rates keep the previous state (no classification flicker from noisy rates).
+- **Gap safety**: rates use only samples within `WINDOW_SPAN_S` (3 s). After a long detection/staleness gap the estimator honestly reports UNKNOWN until fresh evidence re-accumulates — pre-gap rates are never blended across a gap.
+- **Provenance honesty for motion**: estimate provenance is MEASURED only when ALL contributing samples are MEASURED; any SIMULATED sample makes the estimate SIMULATED (simulated approach speed can never claim to be a real measurement). Rates are real m/s via injectable clock, not frame-count guesses.
+- **Track hygiene**: history purged after `MAX_HISTORY_AGE_FRAMES` (15) consecutive absences; `reset()` clears all state.
+- **Test suite** (`tests/test_motion_estimator.py`): 23 hardware-free tests — all four states, insufficient history/observation span, noise robustness (no oscillation), hysteresis dead zones, sustained-change reclassification, STALE/UNAVAILABLE rejection, valid-stream integrity, provenance honesty (MEASURED/SIMULATED/mixed), multi-track independence, gap handling, expiry purge, reset, additive-only field guarantee, and full-pipeline integration (DetectionManager → ObjectTracker → DistanceFusion → MotionEstimator → DistanceNavigator) proving navigation semantics unchanged.
+
+### Changed
+- `vision/object_detector.py`: `DetectedObject` gained `motion_state`, `closing_rate_mps`, `motion_provenance` (additive, default None — fully backward compatible).
+- `main.py`: single `MotionEstimator` instance; `motion.update(detections)` called after fusion, before navigation, in both loops. Navigation/audio untouched.
+- `tests/conftest.py`: motion suite added to the pytest allow-list.
+
+### Verified
+- 134/134 hardware-free pytest suite (111 pre-existing + 23 motion). MotionEstimator costs ~0.046 ms/frame for 8 tracks (0.07% of the 15 FPS budget).
+- `main.py` smoke test: clean no-device fallback, motion live in-loop, audio gating unchanged.
+- SIMULATION-VALIDATED only: all motion behavior is demonstrated on scripted/simulated distances. Real-world closing-rate accuracy depends on MEASURED stereo (Phase 9–10) and is NOT validated.
+
+---
+
 ## - 2026-09-11 (Phase 5 — Object Tracking)
 ### Added
 - **Deterministic Object Tracker** (`vision/object_tracker.py`): persistent, monotonically increasing `track_id` assignment across frames. Hardware-independent (no DepthAI/YOLO/OpenCV/network), operates purely on `DetectedObject` streams, detection-order independent.

@@ -38,6 +38,14 @@ class DetectedObject:
     distance_provenance: str = "UNAVAILABLE"
     distance_source: Optional[str] = None  # provider id, e.g. "mock_scenario"
     
+    # Motion / approach estimation (Phase 6): stamped by MotionEstimator.
+    # motion_provenance is MEASURED only when ALL contributing history
+    # samples are MEASURED; any SIMULATED input marks the estimate
+    # SIMULATED (simulated speed can never claim to be real).
+    motion_state: Optional[str] = None          # APPROACHING|STATIONARY|RECEDING|UNKNOWN
+    closing_rate_mps: Optional[float] = None    # + = distance decreasing (approaching)
+    motion_provenance: Optional[str] = None     # MEASURED|SIMULATED|UNAVAILABLE
+
     # Object Tracking Integration Hook
     track_id: Optional[int] = None  # None indicates tracking inactive or unassigned
 
