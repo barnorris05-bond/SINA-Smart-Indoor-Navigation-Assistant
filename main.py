@@ -12,6 +12,7 @@ from vision.object_tracker import ObjectTracker
 from vision.motion_estimator import MotionEstimator
 from navigation.risk_estimator import RiskEstimator
 from navigation.distance_navigator import DistanceNavigator
+from navigation.temporal_navigator import TemporalNavigator
 from depth.provider_factory import create_distance_fusion
 from audio import AudioManager
 from vision.drawing import draw_boxes, draw_fps, draw_center_marker, draw_regions
@@ -35,7 +36,11 @@ def main():
     risk = RiskEstimator()
     # Distance-aware policy: falls back to the legacy spatial Navigator
     # whenever no usable distance exists (identical behavior then).
-    navigator = DistanceNavigator()
+    # Phase 8: temporal stabilization wraps the distance-aware policy.
+    # Legacy fallback stays intact inside DistanceNavigator; the temporal
+    # layer only smooths de-escalation/action changes and forces STOP on
+    # CRITICAL scene risk. One instance for the application lifetime.
+    navigator = TemporalNavigator(DistanceNavigator())
     audio = AudioManager()
     # Phase B: mock depth provider (SIMULATED distances) until real
     # stereo is validated; swap happens in depth/provider_factory.py.
@@ -58,7 +63,7 @@ def main():
             fusion.update()  # provider frame refresh (no-op for mocks)
             fusion.fuse(detections, frame.shape[:2])
             motion.update(detections)  # Phase 6: approach/stationary/receding
-            risk.update(detections)    # Phase 7: risk annotation (no policy effect yet)
+            risk.update(detections)    # Phase 7: risk annotation (consumed by Phase 8 layer below)
             decision = navigator.decide(detections)
             audio.update(decision)
 
@@ -91,7 +96,7 @@ def main():
                 fusion.update()  # provider frame refresh (no-op for mocks)
                 fusion.fuse(detections, frame.shape[:2])
                 motion.update(detections)  # Phase 6: approach/stationary/receding
-                risk.update(detections)    # Phase 7: risk annotation (no policy effect yet)
+                risk.update(detections)    # Phase 7: risk annotation (consumed by Phase 8 layer below)
                 decision = navigator.decide(detections)
                 audio.update(decision)
 

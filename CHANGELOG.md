@@ -4,6 +4,31 @@ All notable changes to the Smart Indoor Navigation Assistant (SINA) project will
 
 ---
 
+## - 2026-09-13 (Phase 8 — Temporal Navigation Stabilization)
+### Added
+- **TemporalNavigator** (`navigation/temporal_navigator.py`): stabilizing wrapper that composes (never replaces) DistanceNavigator — the candidate decision per frame is accepted, held, or confirmed before reaching audio. Answers "what should SINA do over time?"; does not recompute risk, re-track objects, or generate speech.
+- **Total severity order** (no second hierarchy invented): `severity = max(action_floor, scene_max_risk)` where action floors are STOP=4, SLOW_DOWN/MOVE_*=2, CONTINUE=1 and scene risk reuses the Phase 7 `RiskLevel` ordering. Fixes a draft flaw where, with no risk data, a genuine lateral hazard (CONTINUE → MOVE_LEFT) could be suppressed forever.
+- **Scene risk is a MAX, not a mean**: one CRITICAL object makes the scene CRITICAL — a low-risk object can never dilute a high-risk one.
+- **Scene-CRITICAL forces STOP** (`CRITICAL_RISK_FORCE_STOP`, development/test): a scene whose max annotated risk is CRITICAL produces STOP even when the distance-band candidate was weaker (fast approach just outside the STOP band). This is the point where risk annotation starts to influence navigation; RiskEstimator remains the sole classification authority.
+- **Escalation is immediate**: any severity increase is displayed the frame it appears; every STOP candidate is force-accepted (`CRITICAL_OVERRIDE`) — a genuine hazard is never delayed by smoothing, including a new obstacle arriving while already stopped.
+- **De-escalation requires persistence** (`DEESCALATION_CONFIRM_FRAMES`=3, aligned with the risk layer's anti-flap window so navigation never relaxes faster than its risk input): a lower-severity candidate must appear on 3 consecutive frames; the previous action is re-emitted meanwhile with an auditable "holding … pending de-escalation confirmation (k/N)" reason. One noisy low frame can never erase a confirmed STOP; a hazard returning mid-confirmation resets the counter.
+- **Equal-severity action changes require persistence** (`ACTION_CHANGE_CONFIRM_FRAMES`=2, development/test): covers MOVE_LEFT ↔ MOVE_RIGHT direction flips AND forward ↔ lateral changes — alternating noisy candidates never chatter direction, a persistent genuine change switches after 2 consecutive frames, and re-confirmation of the current action resets the streak (strictly-consecutive semantics).
+- **Legacy fallback preserved**: with no usable distance the candidate comes from the spatial Navigator inside DistanceNavigator and is stabilized like any other candidate; risk annotation is optional (action floors alone still stabilize).
+- **Data honesty**: decision logic only — never fabricates distances, never converts SIMULATED→MEASURED or STALE→current, never mutates detections; held decisions re-emit the current (action, trigger) signature so existing audio dedup/cooldown behavior is unchanged.
+- **Test suite** (`tests/test_temporal_navigator.py`): 38 hardware-free tests — stable scenes, immediate escalation, immediate critical STOP, confirmed de-escalation (exact policy verified), risk-spike streak reset, STOP/SLOW_DOWN and CONTINUE/SLOW_DOWN flap suppression, directional jitter suppression + genuine direction change + streak reset, forward↔lateral gating, scene-CRITICAL force-STOP, monotonic escalation ladder, max-risk scene semantics, legacy fallback parity (temporal output equals legacy Navigator actions under unavailable depth), track disappearance (STOP held through a 1-frame detection loss, track id survives), single-frame distance loss, provenance non-promotion, audio-signature stability during holds, reset semantics, no cross-track leakage, config guards, and a full E2E hazard (2.8→1.0 m sustained approach: track #1 constant, SIMULATED provenance preserved, monotonic escalation to STOP).
+
+### Changed
+- `main.py`: `navigator = TemporalNavigator(DistanceNavigator())` — one instance for the application lifetime in both loops (camera and fallback). Legacy Navigator untouched inside the composition.
+- `tests/conftest.py`: temporal suite added to the pytest allow-list.
+
+### Verified
+- 199/199 hardware-free pytest suite (161 pre-existing + 38 temporal).
+- Temporal layer costs ~0.004 ms/frame including the candidate decision (≈0.006% of the 15 FPS budget); p95 ≈ 0.005 ms.
+- `main.py` smoke test: clean no-device fallback, full annotated chain (tracker → fusion → motion → risk → temporal navigation → audio) runs, audio dedup intact, graceful shutdown.
+- DEVELOPMENT/TEST temporal stabilization only: hysteresis values are not calibrated; demonstrates reduced decision jitter and immediate escalation under SIMULATED conditions. Real-world stabilization/safety validation requires MEASURED stereo and Phases 9–13.
+
+---
+
 ## - 2026-09-13 (Phase 7 — Risk Estimation)
 ### Added
 - **RiskEstimator** (`navigation/risk_estimator.py`): per-object risk classification — `LOW / MEDIUM / HIGH / CRITICAL` — answering "how dangerous is this?" as a layer deliberately separate from MotionEstimator ("what is it doing?"), DistanceNavigator ("what should SINA do?") and AudioManager ("what does the user hear?"). No navigation logic lives in the estimator; no risk logic in tracker/fusion/motion.
