@@ -10,6 +10,7 @@ from vision.yolo_detector import YOLODetector
 from vision.detection_manager import DetectionManager
 from vision.object_tracker import ObjectTracker
 from vision.motion_estimator import MotionEstimator
+from navigation.risk_estimator import RiskEstimator
 from navigation.distance_navigator import DistanceNavigator
 from depth.provider_factory import create_distance_fusion
 from audio import AudioManager
@@ -29,6 +30,9 @@ def main():
     # Phase 6: per-track motion classification over fused distances
     # (APPROACHING/STATIONARY/RECEDING/UNKNOWN + closing rate).
     motion = MotionEstimator()
+    # Phase 7: per-object risk levels (annotation only for now; Phase 8
+    # wires risk into temporal navigation).
+    risk = RiskEstimator()
     # Distance-aware policy: falls back to the legacy spatial Navigator
     # whenever no usable distance exists (identical behavior then).
     navigator = DistanceNavigator()
@@ -54,6 +58,7 @@ def main():
             fusion.update()  # provider frame refresh (no-op for mocks)
             fusion.fuse(detections, frame.shape[:2])
             motion.update(detections)  # Phase 6: approach/stationary/receding
+            risk.update(detections)    # Phase 7: risk annotation (no policy effect yet)
             decision = navigator.decide(detections)
             audio.update(decision)
 
@@ -86,6 +91,7 @@ def main():
                 fusion.update()  # provider frame refresh (no-op for mocks)
                 fusion.fuse(detections, frame.shape[:2])
                 motion.update(detections)  # Phase 6: approach/stationary/receding
+                risk.update(detections)    # Phase 7: risk annotation (no policy effect yet)
                 decision = navigator.decide(detections)
                 audio.update(decision)
 

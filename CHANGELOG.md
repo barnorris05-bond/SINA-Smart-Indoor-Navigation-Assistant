@@ -4,6 +4,30 @@ All notable changes to the Smart Indoor Navigation Assistant (SINA) project will
 
 ---
 
+## - 2026-09-13 (Phase 7 — Risk Estimation)
+### Added
+- **RiskEstimator** (`navigation/risk_estimator.py`): per-object risk classification — `LOW / MEDIUM / HIGH / CRITICAL` — answering "how dangerous is this?" as a layer deliberately separate from MotionEstimator ("what is it doing?"), DistanceNavigator ("what should SINA do?") and AudioManager ("what does the user hear?"). No navigation logic lives in the estimator; no risk logic in tracker/fusion/motion.
+- **Transparent rule ladder** (auditable reasons on every assessment): CRITICAL = distance ≤ `CRITICAL_DISTANCE_M` or TTC ≤ `TTC_CRITICAL_S`; HIGH = TTC ≤ `TTC_WARNING_S`, or warning-band distance + (high-priority OR APPROACHING), or high-priority approaching within FAR; MEDIUM = warning-band distance or high-priority within FAR; LOW otherwise. NOT distance-only: motion and priority escalate; a stationary chair and an approaching person at the same distance classify differently.
+- **Threshold alignment**: distance bands imported from `config/navigation_distance.py`, high-priority threshold from `config/navigation.py` — risk and navigation share one source of truth and cannot silently diverge. Risk-native tunables in `config/risk.py` (TTC bands, TTC minimum rate, anti-flap confirm frames), all labeled DEVELOPMENT/TEST.
+- **Trustworthy TTC only**: `TTC ≈ distance / closing_rate` computed only when motion state is hysteresis-confirmed APPROACHING with rate ≥ `TTC_MIN_CLOSING_RATE_MPS` (0.1 m/s). STALE/UNAVAILABLE/UNKNOWN/receding/tiny-rate inputs yield `ttc_s=None` — never a meaningless TTC. TTC is documented as an ESTIMATE, not a guaranteed collision time.
+- **Conservative unknown**: without usable distance (same usability rule as DistanceNavigator — shared helper `distance_usable`), high-priority obstacles rate MEDIUM (never silently LOW); low-priority rate LOW.
+- **Confidence never lowers risk**: low-confidence detections only add an advisory reason; a shaky person detection at 0.9 m stays CRITICAL.
+- **Anti-flap**: escalation is immediate; de-escalation requires `RISK_DROP_CONFIRM_FRAMES` (3) consecutive lower-level proposals (per track; one noisy frame cannot turn CRITICAL into LOW; a single higher proposal resets the pending drop). Untracked objects are assessed statelessly.
+- **Provenance honesty**: assessment provenance is MEASURED only from genuinely measured distances (SIMULATED under mock mode); unusable inputs are UNAVAILABLE — mirroring the Phase B–D discipline.
+- **Test suite** (`tests/test_risk_estimator.py`): 27 hardware-free tests — the full §9 scenario matrix (far/near/very-near × stationary/approaching/receding, stale, unavailable, unknown motion, low confidence), TTC gating and boundaries, anti-flap behavior (instant escalation, confirmed de-escalation, monotonic severity under sustained approach), threshold-alignment parity with navigation, and full-pipeline integration (DetectionManager → ObjectTracker → DistanceFusion → MotionEstimator → RiskEstimator) proving navigation decisions byte-identical with and without the risk layer.
+
+### Changed
+- `vision/object_detector.py`: `DetectedObject` gained `risk_level`, `risk_reasons`, `risk_ttc_s`, `risk_provenance` (additive, default None — backward compatible).
+- `main.py`: `risk.update(detections)` called after motion, before navigation, in both loops — annotation only this phase (Phase 8 wires risk into temporal navigation). Navigation/audio semantics unchanged.
+- `tests/conftest.py`: risk suite added to the pytest allow-list.
+
+### Verified
+- 161/161 hardware-free pytest suite (134 pre-existing + 27 risk). RiskEstimator costs ~0.025 ms/frame for 8 objects (0.04% of the 15 FPS budget).
+- `main.py` smoke test: clean no-device fallback, risk annotation live in-loop, no behavioral change to navigation or audio.
+- SIMULATION-VALIDATED only: risk behavior is demonstrated on simulated distances/motion. Real-world risk calibration depends on MEASURED stereo and calibrated thresholds (Phases 9–10); current levels are not safety-calibrated.
+
+---
+
 ## - 2026-09-13 (Phase 6 — Motion / Approach Estimation)
 ### Added
 - **MotionEstimator** (`vision/motion_estimator.py`): per-track temporal classification of distance behavior — `APPROACHING / STATIONARY / RECEDING / UNKNOWN` plus `closing_rate_mps` (positive = distance decreasing = approaching). Dedicated module: no motion logic in tracker, fusion, navigation or audio; no risk logic (Phase 7).

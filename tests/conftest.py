@@ -30,6 +30,7 @@ COLLECTABLE = {
     "test_mock_depth_stack.py",
     "test_object_tracker.py",
     "test_motion_estimator.py",
+    "test_risk_estimator.py",
     "test_pipeline_mock_e2e.py",
 }
 

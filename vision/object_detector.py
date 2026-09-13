@@ -46,6 +46,14 @@ class DetectedObject:
     closing_rate_mps: Optional[float] = None    # + = distance decreasing (approaching)
     motion_provenance: Optional[str] = None     # MEASURED|SIMULATED|UNAVAILABLE
 
+    # Risk estimation (Phase 7): stamped by RiskEstimator. Additive
+    # annotation only - navigation/audio do not consume it until the
+    # temporal-navigation phase. risk_reasons is auditable evidence.
+    risk_level: Optional[str] = None            # LOW|MEDIUM|HIGH|CRITICAL
+    risk_reasons: Optional[List[str]] = None
+    risk_ttc_s: Optional[float] = None          # estimated TTC (None = not trustworthy)
+    risk_provenance: Optional[str] = None       # MEASURED|SIMULATED|UNAVAILABLE
+
     # Object Tracking Integration Hook
     track_id: Optional[int] = None  # None indicates tracking inactive or unassigned
 
