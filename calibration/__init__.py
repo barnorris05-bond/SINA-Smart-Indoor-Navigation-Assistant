@@ -82,6 +82,18 @@ from calibration.protocol import (
     VALIDATION,
     ExperimentProtocol,
 )
+from calibration.campaign import (
+    SYNTHETIC_OFFSET_M,
+    SYNTHETIC_SCALE,
+    AcceptanceGate,
+    CampaignConfig,
+    CampaignResult,
+    campaign_report_json,
+    coverage_acceptance,
+    run_campaign,
+    scene_truth_delta_m,
+    synthetic_jitter,
+)
 
 __all__ = [
     "ExperimentSession",
@@ -125,4 +137,14 @@ __all__ = [
     "UNASSIGNED",
     "VALIDATION",
     "VALID_TRANSITIONS",
+    "SYNTHETIC_SCALE",
+    "SYNTHETIC_OFFSET_M",
+    "AcceptanceGate",
+    "CampaignConfig",
+    "CampaignResult",
+    "campaign_report_json",
+    "coverage_acceptance",
+    "run_campaign",
+    "scene_truth_delta_m",
+    "synthetic_jitter",
 ]

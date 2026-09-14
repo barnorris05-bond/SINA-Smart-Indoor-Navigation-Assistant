@@ -55,6 +55,7 @@ from calibration.capture import (
     INCOMPLETE,
     PLANNED,
     Capture,
+    GroundTruthEntry,
 )
 from calibration.plan import TargetDistancePlan
 from calibration.session import ExperimentSession
@@ -502,6 +503,29 @@ class ExperimentProtocol:
                 str(k): str(v)
                 for k, v in (cd.get("metadata") or {}).items()
             }
+            # Ground-truth AUDIT is serialized in the manifest and must
+            # survive rehydration (§17: ground-truth metadata preserved).
+            capture.ground_truth_log = [
+                GroundTruthEntry(
+                    scene_id=str(e["scene_id"]),
+                    frame_id=int(e["frame_id"]),
+                    track_id=(
+                        None if e.get("track_id") is None
+                        else int(e["track_id"])
+                    ),
+                    ground_truth_distance_m=float(
+                        e["ground_truth_distance_m"]
+                    ),
+                    source=e.get("source"),
+                    uncertainty_m=e.get("uncertainty_m"),
+                    note=e.get("note"),
+                )
+                for e in (cd.get("ground_truth_audit") or [])
+            ]
+            # Persisted derived counts (record payloads are not in the
+            # manifest): the audit copy reports what each capture held.
+            capture.record_count_audit = int(cd.get("n_records") or 0)
+            capture.missing_truth_audit = int(cd.get("missing_truth") or 0)
             protocol.captures.append(capture)
         protocol.assignments = {
             (parts[0], float(parts[1]), int(parts[2])): str(role)

@@ -397,3 +397,51 @@ never treated as completed.
 full capture run ≈ 2.8 ms · verify_split ≈ 2.3 ms · completion ≈ 3.5
 ms · manifest ≈ 1.7 ms · to_json ≈ 5.9 ms (189 KB) · from_manifest
 < 1 ms. No optimization needed.
+
+## Phase 11 — Synthetic end-to-end calibration campaign
+
+`calibration/campaign.py` proves the COMPLETE offline workflow end-to-end
+on deterministic synthetic data: plan → protocol slots → captures (with a
+planned ABORT/resume, one INCOMPLETE capture, and one untruthed slot) →
+protocol-level split → verify_split → baseline metrics → candidate fit on
+calibration data only → FROZEN model → validation metrics → coverage
+acceptance → dataset freeze → deterministic report.
+
+- **Known generating model (§ of Phase 11):**
+  `predicted = ground_truth × 1.10 + 0.08 + jitter(frame_id)` — pure
+  arithmetic jitter (no RNG); the campaign knows the truth and gates can
+  verify recovery. The affine fit recovers the theoretical inverse
+  (a≈0.9091, b≈−0.0727) to ≈1e-4; canonical acceptance: baseline
+  validation MAE 0.3003 m → calibrated 0.0019 m.
+- **Central invariant proven:** VIRTUAL SLOT → ATTEMPT HISTORY → LATEST
+  TERMINAL ATTEMPT → DATASET MEMBERSHIP. The aborted attempt's records
+  (distinct observation identities, sentinel prediction) are preserved
+  in audit history but NEVER enter a dataset; the resumed attempt's
+  records enter exactly once. INCOMPLETE captures stay UNASSIGNED and
+  visible in the completion report.
+- **Acceptance gates** are derived from measured metrics only (baseline
+  MAE > 0; calibrated MAE and RMSE improve; calibrated MAE within the
+  documented tolerance; EXPERIMENT-TARGET coverage complete in BOTH
+  splits). A deliberately wrong model (identity applied to biased data)
+  is rejected — the gates fail loudly on bad calibration, and a
+  zero-improvement fixture (baseline MAE 0.0) honestly fails the
+  baseline-positive gate.
+- **Diagnostics describe ALL captured data** (assigned datasets plus
+  unassigned terminal captures — e.g. the injected outlier in the
+  INCOMPLETE slot is surfaced, never deleted); ACCURACY metrics use only
+  assigned datasets. Raw records are byte-stable through truth
+  attachment, fitting, freeze, and reporting.
+- **Leakage tests:** overlap raises via `assert_disjoint`; per-slot
+  re-assignment to the other role is rejected; fitting on calibration
+  data only is proven by refitting with drastically perturbed validation
+  data and asserting identical fitted parameters.
+- **Manifest round-trip** preserves attempt history, latest-terminal
+  selection, assignments, completion state, ground-truth audit, and
+  persisted record counts (`record_count_audit`/`missing_truth_audit`
+  on rehydrated captures); rehydrated protocols are FROZEN.
+
+**Phase 11 is SOFTWARE-VALIDATED / SIMULATION-VALIDATED only.** Synthetic
+success proves the workflow, NOT physical OAK-D measurement accuracy:
+real capture requires Phase 9 hardware validation (Checkpoint A remains
+BLOCKED), and real calibration requires Phase 10's ground-truth protocol
+with MEASURED observations.

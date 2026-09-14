@@ -154,6 +154,11 @@ class Capture:
     end_time: Optional[str] = None
     # free-form operator-supplied context; never fabricated by code
     metadata: Dict[str, str] = field(default_factory=dict)
+    # Audit-only counts set on manifest REHYDRATION (record payloads
+    # live in the JSONL datasets, not in the manifest): what the
+    # capture held when it was serialized. None on live captures.
+    record_count_audit: Optional[int] = None
+    missing_truth_audit: Optional[int] = None
 
     # ------------------------------------------------------
     # Lifecycle
@@ -317,7 +322,13 @@ class Capture:
     # ------------------------------------------------------
 
     def missing_truth(self) -> int:
-        """Records still lacking ground truth (from the DERIVED view)."""
+        """
+        Records still lacking ground truth (from the DERIVED view).
+        On a REHYDRATED capture (no record payloads) the serialized
+        audit count is reported instead of a fabricated 0.
+        """
+        if not self.records:
+            return self.missing_truth_audit or 0
         return sum(
             1 for r in self.derived_records()
             if r.ground_truth_distance_m is None
@@ -332,12 +343,16 @@ class Capture:
         return (self.target_distance_m, self.repetition)
 
     def to_dict(self) -> Dict[str, object]:
+        n_records = (
+            len(self.records) if self.records
+            else (self.record_count_audit or 0)
+        )
         return {
             "target_distance_m": self.target_distance_m,
             "repetition": self.repetition,
             "scene_id": self.scene_id,
             "state": self.state,
-            "n_records": len(self.records),
+            "n_records": n_records,
             "n_truth_attached": len(self.ground_truth_log),
             "missing_truth": self.missing_truth(),
             "start_time": self.start_time,
