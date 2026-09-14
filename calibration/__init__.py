@@ -62,6 +62,26 @@ from calibration.reporting import (
     build_experiment_report,
     render_experiment_markdown,
 )
+from calibration.capture import (
+    ABORTED,
+    ACTIVE,
+    COMPLETED,
+    INCOMPLETE,
+    Capture,
+    CaptureNotActiveError,
+    CaptureStateError,
+    GroundTruthEntry,
+    PLANNED,
+    VALID_TRANSITIONS,
+)
+from calibration.protocol import (
+    CALIBRATION,
+    ProtocolFrozenError,
+    ProtocolStateError,
+    UNASSIGNED,
+    VALIDATION,
+    ExperimentProtocol,
+)
 
 __all__ = [
     "ExperimentSession",
@@ -89,4 +109,20 @@ __all__ = [
     "evaluate_calibrated",
     "build_experiment_report",
     "render_experiment_markdown",
+    "ABORTED",
+    "ACTIVE",
+    "CALIBRATION",
+    "Capture",
+    "CaptureNotActiveError",
+    "CaptureStateError",
+    "COMPLETED",
+    "ExperimentProtocol",
+    "GroundTruthEntry",
+    "INCOMPLETE",
+    "PLANNED",
+    "ProtocolFrozenError",
+    "ProtocolStateError",
+    "UNASSIGNED",
+    "VALIDATION",
+    "VALID_TRANSITIONS",
 ]

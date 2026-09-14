@@ -318,3 +318,82 @@ uncalibrated numbers are always on the record first (§10).
 fit + selection + both evaluations ≈ 92 ms · report ≈ 36 ms ·
 repeatability ≈ 4 ms · availability ≈ 10 ms · outlier filter ≈ 5 ms.
 No optimization needed.
+
+## Phase 10 data-collection protocol: controlled capture + manifests
+
+**Status: SOFTWARE-VALIDATED (unit tests) / SIMULATION-VALIDATED
+(synthetic fixtures) only.** **REAL CAPTURE REQUIRES SUCCESSFUL PHASE 9
+HARDWARE VALIDATION** (still BLOCKED). Nothing here performs or claims
+physical measurement, calibration, or safety.
+
+The `calibration.capture` / `calibration.protocol` modules implement
+the operator-facing experiment lifecycle over the existing framework
+(no duplicated data models — `MeasurementRecord`, `ExperimentSession`,
+`TargetDistancePlan` are reused verbatim):
+
+```
+ExperimentProtocol(plan, scenes, experiment_id)
+    -> start_capture(scene, target, rep)   slot PLANNED -> ACTIVE
+    -> capture.add_records(...)            RAW records (never mutated)
+    -> capture.attach_ground_truth(...)    audited (§11), operator-supplied
+    -> capture.complete()/abort()          deterministic state machine
+    -> assign(capture, CALIBRATION|VALIDATION)   immutable split
+    -> verify_split()                      assert_disjoint, fails loudly
+    -> freeze()                            DATASET FROZEN (§17)
+    -> completion() / manifest() / to_json()
+```
+
+### Capture lifecycle (deterministic state machine)
+
+`PLANNED -> ACTIVE -> {COMPLETED | INCOMPLETE | ABORTED}`;
+`PLANNED -> ABORTED`. Terminal states accept nothing; invalid
+transitions raise `CaptureStateError`; adding records or truth outside
+ACTIVE raises `CaptureNotActiveError`. An interrupted capture is
+never treated as completed.
+
+- **Slots vs attempts**: slots are virtual (scene × target ×
+  repetition from the plan); a slot with no attempt is PLANNED.
+  `start_capture` on an ABORTED slot creates attempt #2 — the aborted
+  attempt is preserved untouched and never merged into the resume
+  (only the LATEST terminal attempt feeds a dataset).
+- **Completeness rule (documented)**: ≥ `min_observations` records,
+  each with known identity, project-vocabulary provenance, and finite
+  timestamp — otherwise the capture becomes INCOMPLETE (kept and
+  visible, never discarded). Ground truth is deliberately NOT required
+  for capture completion; its absence surfaces in the completion
+  report and as `ground_truth=None` (never 0).
+- **Repetitions** are first-class slots — never overwritten,
+  individually recoverable.
+- **Target vs ground truth**: the slot's `target_distance_m` is the
+  plan value; the operator's observed reference lives only on records
+  (`ground_truth_distance_m`) and audit entries. Never merged.
+- **Ground-truth audit**: every attachment records observation
+  identity, value, source/operator note, and — only if the operator
+  explicitly supplies it — an uncertainty. Never invented.
+
+### Dataset handling
+
+- **Assignment** is per-slot, explicit, and immutable (re-assignment
+  to the other role is rejected); only terminal captures can be
+  assigned. `dataset_records(role)` returns the DERIVED view (truth
+  applied) of latest terminal attempts; raw records are never mutated.
+- **`verify_split()`** runs `assert_disjoint` across the two roles —
+  shared observation identities fail loudly (§13).
+- **`freeze()`** makes captures, assignments, and truth immutable from
+  the experiment layer (`ProtocolFrozenError` on any mutation).
+  Manifests rehydrated via `from_manifest()` are always FROZEN audit
+  copies (§17/§19).
+- **Completion report** counts planned/completed/incomplete/aborted
+  slots, missing ground truth, missing observations (exact record
+  count), resumed slots, and assignment coverage — `fully_complete`
+  is `False` while anything is missing (§15).
+- **Manifest** (`sina-capture-manifest/1`): deterministic JSON with
+  plan, scenes, planned slots, per-capture lifecycle + truth audit,
+  and the assignment table (§14/§19). `software_version` and all
+  environment fields stay `None` unless operator-supplied.
+
+### Performance (measured, synthetic 160-slot experiment)
+
+full capture run ≈ 2.8 ms · verify_split ≈ 2.3 ms · completion ≈ 3.5
+ms · manifest ≈ 1.7 ms · to_json ≈ 5.9 ms (189 KB) · from_manifest
+< 1 ms. No optimization needed.
