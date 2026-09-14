@@ -4,6 +4,29 @@ All notable changes to the Smart Indoor Navigation Assistant (SINA) project will
 
 ---
 
+## - 2026-09-14 (Offline Measurement & Evaluation Infrastructure — hardware parked)
+### Added
+- **Measurement record schema** (`evaluation/record.py`): one immutable `MeasurementRecord` per (frame, object) observation — scene_id, frame_id, timestamp, track_id, label, confidence, bbox, region, predicted_distance_m, distance_provenance, distance_source, ground_truth_distance_m — with JSONL round-trip, CSV form and strict deserialization (unknown provenance / bad bbox / newer schema rejected). Ground truth is a separate field and is never fabricated: missing truth stays `None`, never 0.
+- **Distance accuracy metrics** (`evaluation/metrics.py`): MAE, RMSE, median/max absolute error, median relative error, p95 absolute error, invalid-measurement rate — computed ONLY over valid records (non-null, positive, usable provenance). Invalid measurements (None / UNAVAILABLE / STALE / non-positive) are excluded from accuracy and counted in `invalid_rate` — they never silently become zero errors. Provenance filtering (`evaluate(..., provenances=("MEASURED",))`) plus `validation_class()` labeling: SIMULATION-VALIDATED / MEASUREMENT-VALIDATED (per recorded provenance) / MIXED / NO USABLE MEASUREMENTS — mixing provenances is always visible, never silent.
+- **Calibration/validation separation**: observation identity `(scene_id, frame_id, track_id)`; `check_overlap()` reports shared observations and shared scenes; `assert_disjoint()` RAISES on identical triples — tuning and validating on the same measurements is an error, not a warning.
+- **Failure injection** (`evaluation/injection.py`): `ScriptedDepthProvider` scripts per-frame, per-label depth outcomes — UNAVAILABLE, SIMULATED, MEASURED-contract values (synthetic data for provenance-handling tests only), STALE (stream-quiet form), and OLD-timestamp (exercises fusion's demotion to STALE) — deterministic, beyond-script hold, pre-first-update clamp documented.
+- **Offline replay** (`evaluation/replay.py`): `ReplayRunner` drives the REAL decision pipeline (DetectionManager → ObjectTracker → DistanceFusion → MotionEstimator → RiskEstimator → TemporalNavigator) over scripted frames with a synthetic frame-rate clock — no OAK-D, no YOLO, no audio. Fully deterministic (same frames → identical records/events/decisions); provenance copied verbatim from the real fusion stamping; temporal policy knobs exposed via `ReplayConfig`.
+- **Live capture helper** (`evaluation/recorder.py`): `MeasurementRecorder` converts annotated pipeline frames into records + event trace, with `attach_truth()` joining manual ground truth by `(scene_id, frame_id, track_id)` — the Phase 10 measurement workflow, ready for real OAK-D sessions.
+- **Structured event log** (`evaluation/event_log.py`): JSONL per-frame trace (action, reason, priority, per-object distance/provenance/motion/risk/TTC) — complements `utils.logger`, does not replace it.
+- **File I/O** (`evaluation/report.py`): append-friendly JSONL read/write and JSON summaries; no database.
+- **Documentation** (`docs/evaluation.md`): schema, provenance semantics, exact metric definitions, invalid-measurement policy, calibration/validation separation, and the gated future OAK-D workflow.
+- **Test suite** (`tests/test_evaluation_infra.py`): 60 hardware-free tests — serialization/deserialization round-trips, missing-field/schema/provenance/bbox rejections, hand-computed metric values, empty and single-sample datasets, invalid-measurement accounting, provenance filtering and classification, overlap detection and assertion, scripted-injection contract, replay determinism, all milestone §12 failure scenarios through the real pipeline (unavailable/stale/old-timestamp depth, sudden jumps, SIMULATED↔MEASURED and MEASURED→UNAVAILABLE transitions, disappearing/returning tracks, approaching/receding escalation, low-risk object cannot dilute a critical scene), recorder capture + truth joining, event-log fields, and file I/O round-trips.
+
+### Changed
+- `tests/conftest.py`: evaluation suite added to the pytest allow-list (also carries the pending Phase 9 provider-suite entry; that hardware probe file remains intentionally uncommitted until hardware validation).
+
+### Verified
+- 284/284 hardware-free pytest suite (224 pre-existing + 60 evaluation). Full replay of 60 frames × 3 objects — all six layers plus recording — costs ~0.18 ms/frame (~0.27% of the 15 FPS budget); metrics/serialization are microseconds per record.
+- `main.py` smoke test unchanged: clean no-device fallback, mock mode untouched (the evaluation package is not imported by the production path).
+- SIMULATION-VALIDATED / SOFTWARE-VALIDATED only: the replay exercises real decision code on synthetic distances. **Phase 9 hardware checkpoint remains BLOCKED — no OAK-D device present; no hardware, measurement, system or safety validation is claimed.**
+
+---
+
 ## - 2026-09-13 (Phase 8 — Temporal Navigation Stabilization)
 ### Added
 - **TemporalNavigator** (`navigation/temporal_navigator.py`): stabilizing wrapper that composes (never replaces) DistanceNavigator — the candidate decision per frame is accepted, held, or confirmed before reaching audio. Answers "what should SINA do over time?"; does not recompute risk, re-track objects, or generate speech.
