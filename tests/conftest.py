@@ -38,6 +38,7 @@ COLLECTABLE = {
     "test_calibration_framework.py",
     "test_capture_protocol.py",
     "test_synthetic_calibration_campaign.py",
+    "test_measurement_contract.py",
     "test_pipeline_mock_e2e.py",
 }
 

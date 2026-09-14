@@ -42,6 +42,7 @@ Nonlinear models can be added later behind the same interface; no
 model is assumed appropriate before real data exists.
 """
 
+import math
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -133,8 +134,21 @@ class CalibrationModel:
     def _fit_rows(
         records: Sequence[MeasurementRecord], min_samples: int
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Extract (predicted, ground_truth) arrays from valid records."""
-        valid = [r for r in records if is_valid_record(r)]
+        """
+        Extract (predicted, ground_truth) arrays from valid records.
+
+        Non-finite values (nan/inf) are rejected IN ADDITION to the
+        is_valid_record gate (Phase 12 §8): inf > 0 and nan comparisons
+        would otherwise slip into the least-squares fit and poison the
+        parameters. Invalid values are excluded from the fit, never
+        clamped; coverage stays visible via the sample count.
+        """
+        valid = [
+            r for r in records
+            if is_valid_record(r)
+            and math.isfinite(r.predicted_distance_m)
+            and math.isfinite(r.ground_truth_distance_m)
+        ]
         if len(valid) < min_samples:
             raise CalibrationError(
                 f"insufficient calibration samples: {len(valid)} valid of "

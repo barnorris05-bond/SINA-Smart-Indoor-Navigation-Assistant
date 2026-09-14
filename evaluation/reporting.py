@@ -381,3 +381,68 @@ def write_csv_summary(path: Union[str, Path], report: dict) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("w", encoding="utf-8", newline="") as f:
         csv.writer(f).writerows(csv_summary_rows(report))
+
+
+# ==============================================================
+# Measurement quality summary (Phase 12 §13)
+# ==============================================================
+
+def measurement_quality_summary(
+    records: Sequence[MeasurementRecord],
+    calibrated_observations: Optional[Sequence] = None,
+) -> Dict[str, object]:
+    """
+    Deterministic provenance/quality breakdown of a measurement set.
+
+    Purely descriptive: it COUNTS observations per provenance and truth
+    coverage, and explicitly refuses to combine MEASURED and SIMULATED
+    accuracy into one physical-accuracy claim (Phase 12 §13).
+
+    calibrated_observations: optional calibration.experiment.
+    CalibratedObservation sequence; its *_CALIBRATED provenances are
+    counted separately from raw provenances.
+
+    Returns {"total", "valid", "invalid", "by_provenance",
+    "missing_truth", "truth_coverage", "calibrated_by_provenance",
+    "note"}. validation_class() is reproduced under "classification"
+    so a summary can never be read as an accuracy verdict by itself.
+    """
+    from evaluation.metrics import is_valid_record, validation_class
+
+    n_total = len(records)
+    n_valid = sum(1 for r in records if is_valid_record(r))
+    by_prov: Dict[str, int] = {}
+    missing_truth = 0
+    for r in records:
+        by_prov[r.distance_provenance] = \
+            by_prov.get(r.distance_provenance, 0) + 1
+        if r.ground_truth_distance_m is None:
+            missing_truth += 1
+
+    cal_by_prov: Dict[str, int] = {}
+    if calibrated_observations is not None:
+        for obs in calibrated_observations:
+            prov = obs.calibrated_provenance
+            cal_by_prov[prov] = cal_by_prov.get(prov, 0) + 1
+
+    truth_coverage = (
+        ((n_total - missing_truth) / n_total) if n_total else 0.0
+    )
+    return {
+        "total": n_total,
+        "valid": n_valid,
+        "invalid": n_total - n_valid,
+        "by_provenance": dict(sorted(by_prov.items())),
+        "missing_truth": missing_truth,
+        "truth_coverage": truth_coverage,
+        "calibrated_by_provenance": dict(sorted(cal_by_prov.items())),
+        "classification": validation_class(
+            r.distance_provenance for r in records
+        ),
+        "note": (
+            "Descriptive counts only. MEASURED and SIMULATED accuracy are "
+            "never combined into a single physical-accuracy claim; "
+            "stale/unavailable observations are availability states, not "
+            "distance values."
+        ),
+    }

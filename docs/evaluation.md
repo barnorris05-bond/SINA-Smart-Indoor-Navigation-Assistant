@@ -445,3 +445,66 @@ success proves the workflow, NOT physical OAK-D measurement accuracy:
 real capture requires Phase 9 hardware validation (Checkpoint A remains
 BLOCKED), and real calibration requires Phase 10's ground-truth protocol
 with MEASURED observations.
+
+## Phase 12 — Physical measurement contract & calibration readiness
+
+`calibration/contract.py` hardens the boundary a future REAL measured
+distance must cross. Three questions stay separate:
+
+- **Measurement validity** — `check_observation()` returns an explicit
+  verdict (VALID / STALE / UNAVAILABLE / INVALID with reasons; never a
+  silent clamp): finite, strictly positive distance; provenance inside
+  the six-value taxonomy; UNAVAILABLE/STALE labels can never carry a
+  value; finite non-negative timestamp; future timestamps INVALID;
+  age beyond the staleness window (default mirrors
+  `config.MEASUREMENT_STALE_S`) is STALE — stale data can never enter
+  a fresh dataset as a current measurement.
+- **Measurement provenance** — the source vocabulary
+  MEASURED | SIMULATED | UNAVAILABLE | STALE (from
+  `depth.provider.DistanceProvenance`, reused verbatim).
+- **Calibration provenance** — MEASURED_CALIBRATED |
+  SIMULATED_CALIBRATED, derived ONLY from the source provenance by a
+  calibration transform (identity keeps the vocabulary verbatim).
+
+**Provenance invariants (machine-checked, `provenance_invariant_report`):**
+A SIMULATED never becomes MEASURED · B UNAVAILABLE stays unavailable ·
+C STALE never presents as fresh · D MEASURED raw → MEASURED_CALIBRATED
+under a fitted transform · E SIMULATED raw → SIMULATED_CALIBRATED ·
+F raw records byte-unchanged by calibration · G calibrated labels are
+exactly the legal mapping of their source (no manual relabeling).
+
+**Calibration eligibility** (`calibration_eligibility`): a record enters
+a fit only with a usable value + INDEPENDENT ground truth. UNAVAILABLE,
+STALE, missing/invalid truth, non-finite or non-positive values are
+excluded with reasons (AUDIT-PRESENT BUT INVALID-FOR-FIT — visible,
+never dropped). Regression fix: `models._fit_rows` now rejects
+nan/inf explicitly (inf > 0 previously slipped through the usability
+gate into polyfit). Truth is never inferred from predictions.
+
+**Dataset acceptance** (`accept_dataset`): INVALID-AUDIT-STATE (raises
+`DatasetAcceptanceError`) = split overlap, unknown provenance, unfrozen
+protocol where freeze is required. INVALID-FOR-FIT (reported) = stale,
+unavailable, missing truth, invalid numerics. Optional EXPERIMENT-TARGET
+coverage gate. Acceptance ≠ physical accuracy.
+
+**Quality summary** (`evaluation.reporting.measurement_quality_summary`):
+descriptive counts per provenance, truth coverage, calibrated-label
+counts; MEASURED and SIMULATED accuracy are never combined into one
+physical-accuracy claim.
+
+**Two distinct gates (never merged):**
+
+    SOFTWARE CALIBRATION READINESS  =  PASS   (software_calibration_readiness())
+    OAK-D HARDWARE CHECKPOINT       =  BLOCKED (Phase 9 Checkpoint A)
+
+The readiness check exercises the ten software capabilities in-memory
+(provider contract, provenance vocabulary, calibrated labels, capture
+protocol, truth attachment, split enforcement, manifest persistence,
+freeze, report generation, raw/derived separation). A PASS never
+implies hardware validation; only the hardware diagnostic can unlock
+real MEASURED data.
+
+**Phase 12 is SOFTWARE-VALIDATED / SIMULATION-VALIDATED only.** Actual
+OAK-D stereo measurement, USB 3.x operation, physical distance accuracy,
+real-world calibration, environmental robustness, calibration
+generalization, and navigation safety remain NOT VALIDATED.
