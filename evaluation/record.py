@@ -89,6 +89,11 @@ class MeasurementRecord:
         return json.dumps(self.to_dict(), sort_keys=True)
 
     @classmethod
+    def parse_json(cls, line: str) -> "MeasurementRecord":
+        """Deserialize one JSON line (round-trip of to_json())."""
+        return cls.from_dict(json.loads(line))
+
+    @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MeasurementRecord":
         """
         Deserialize one record.

@@ -155,6 +155,94 @@ tracks keep their id; approaching object escalates monotonically to STOP;
 receding object eventually de-escalates; a low-risk object never dilutes
 a critical scene.
 
+## Offline analysis & reporting layer
+
+On top of recording, `evaluation/analysis.py`,
+`evaluation/navigation_analysis.py` and `evaluation/reporting.py`
+implement the full analysis workflow:
+
+```
+recorded JSONL/CSV -> load -> validate -> filter -> evaluate -> summarize -> report
+```
+
+### Workflow
+
+```python
+from evaluation.analysis import load_jsonl_records, filter_provenance
+from evaluation.reporting import analyze_dataset, build_report, render_markdown
+
+records = load_jsonl_records("capture.jsonl")          # strict: malformed line -> DatasetError
+records = filter_provenance(records, "MEASURED")       # optional pre-filter
+analysis = analyze_dataset(records, events=None)        # structured analysis
+report = build_report(analysis, dataset_role="VALIDATION")
+print(render_markdown(report))
+```
+
+Or from the shell (no dependencies added):
+
+```
+python -m evaluation analyze capture.jsonl \
+    [--events events.jsonl] \
+    [--role CALIBRATION|VALIDATION|UNSPECIFIED] \
+    [--name my_report] \
+    [--json report.json] [--markdown report.md] [--csv summary.csv]
+```
+
+The CLI validates input, prints a concise deterministic summary, and
+exits 2 with a one-line actionable error (never a traceback) on
+missing/malformed/empty input.
+
+### Validation triage
+
+`validate_records()` triages every record into accuracy-valid or an
+explicit invalid bucket — `missing_ground_truth`,
+`non_positive_ground_truth`, `unavailable_prediction`,
+`stale_prediction`, `non_positive_prediction`,
+`non_usable_provenance_with_value`, `unknown_provenance` — counted in
+the report's `validation_triage` and never silently zeroed.
+
+### Report schema (JSON, deterministic, no wall-clock fields)
+
+| section | content |
+|---|---|
+| `metadata` | name, source, `dataset_role`, schema version, limitations |
+| `dataset_summary` | totals, valid/invalid predictions, invalid rate, provenance counts, scenes, tracks, labels, frame/timestamp ranges |
+| `validation_triage` | invalid counts by reason |
+| `provenance_summary` | per-provenance count + metrics; absent provenances shown as absent (e.g. `MEASURED: not available`) |
+| `overall_metrics` | MAE / RMSE / median / max / p95 / relative / invalid rate + `validation_class` |
+| `per_label_metrics` | sample/valid/invalid, MAE, RMSE, p95, note for insufficient data |
+| `per_scene_metrics` | per-scene counts, provenance, metrics, labels |
+| `distance_bins` | accuracy by ground-truth range (0–1, 1–2, …, >5 m, `no_ground_truth`) |
+| `error_distribution` | absolute/relative error buckets, counts by distance range |
+| `navigation_summary` | action counts, transitions, changes, stable runs, STOP frames, escalations (descriptive) |
+| `risk_summary` | LOW/MEDIUM/HIGH/CRITICAL counts, per-object transitions, TTC min/median (descriptive) |
+| `temporal_summary` | changes/frame, longest stable run, STOP runs, direction flips (descriptive) |
+
+### Navigation / risk / temporal analysis is DESCRIPTIVE
+
+These statistics quantify recorded behavior. They do **not** claim
+navigation effectiveness or safety. `compare_datasets(baseline,
+treatment)` produces an explicitly labeled *DESCRIPTIVE COMPARISON*
+(equal scene scripts are the caller's responsibility); it never emits
+"improvement" or "proven" language — a causal claim needs a controlled
+comparison that this tooling does not perform.
+
+### Performance (measured, synthetic 10k-record dataset)
+
+load ≈ 120 ms · analyze ≈ 80 ms · report build < 1 ms · markdown < 1 ms
+· JSON+CSV+MD writes ≈ 4 ms. No optimization needed.
+
+### Limitations of this tooling
+
+- **This tooling does not validate safety.**
+- **This tooling does not validate real-world distance accuracy by
+  itself** — accuracy conclusions require MEASURED data with real
+  ground truth (Phase 10).
+- Metrics over SIMULATED data are SIMULATION-VALIDATED only; the
+  report states this in `limitations` and in every `validation_class`.
+- Navigation/risk/temporal summaries require an event trace; without
+  one those sections are `None`.
+
 ## Future OAK-D workflow (gated — do not skip steps)
 
 1. **Phase 9 Checkpoint A** — `python tests\test_oak_stereo_diagnostic.py`

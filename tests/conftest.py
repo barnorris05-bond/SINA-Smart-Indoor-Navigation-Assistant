@@ -34,6 +34,7 @@ COLLECTABLE = {
     "test_temporal_navigator.py",
     "test_oak_provider.py",
     "test_evaluation_infra.py",
+    "test_evaluation_analysis.py",
     "test_pipeline_mock_e2e.py",
 }
 

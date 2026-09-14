@@ -4,6 +4,22 @@ All notable changes to the Smart Indoor Navigation Assistant (SINA) project will
 
 ---
 
+## - 2026-09-14 (Offline Evaluation Analysis & Reporting — hardware parked)
+### Added
+- **Analysis layer** (`evaluation/analysis.py`): strict JSONL loading (malformed line → `DatasetError` with line number, no silent partial reads), `validate_records()` triage into explicit invalid buckets (missing/non-positive ground truth, unavailable/stale/missing predictions, non-usable provenance with a value, unknown provenance — never silently zeroed), non-mutating provenance/scene/label/track filters, `dataset_summary` (totals, valid/invalid predictions, invalid rate, provenance counts, scenes, tracks, labels, frame/timestamp ranges), grouped metrics reusing `metrics.py` exclusively (provenance/label/scene groups — MEASURED and SIMULATED never mixed), error distributions and distance-bin analysis with clearly labeled **ANALYSIS BINS** (descriptive categories, no navigation thresholds imported — enforced by test).
+- **Descriptive navigation/risk/temporal analysis** (`evaluation/navigation_analysis.py`): action counts, A→B transitions, action-change count, stable runs, STOP frames/runs, escalation counting; risk-level counts and per-object transitions, valid-TTC min/median; changes per frame, direction flips; `compare_datasets()` produces an explicitly labeled **DESCRIPTIVE COMPARISON** (no causal language in output — verified by test).
+- **Report generation** (`evaluation/reporting.py`): `analyze_dataset()` orchestration, `build_report()` with explicit CALIBRATION/VALIDATION/UNSPECIFIED roles (never assumed to be validation data), `evaluate_pair()` asserting calibration/validation disjointness **before** evaluation (overlap fails loudly, records never silently removed), deterministic JSON report (no wall-clock fields), Markdown renderer consuming structured results (no duplicated logic), flat CSV summary.
+- **CLI** (`evaluation/__main__.py`): `python -m evaluation analyze RECORDS.jsonl [--events ...] [--role ...] [--json/--markdown/--csv ...]` — validates input, prints a concise deterministic summary, exits 2 with actionable one-line errors (never tracebacks) on missing/malformed/empty input.
+- **Record parsing** (`evaluation/record.py`): `MeasurementRecord.parse_json()` round-trip helper.
+- **Test suite** (`tests/test_evaluation_analysis.py`): 59 hardware-free tests — loading round-trips and malformed-input line numbers, all invalid-triage reasons, dataset summary fields and empty dataset, filter semantics and unknown-filter errors, grouped-metric provenance separation, exact bucket math for error distributions, distance-bin reporting (including the `no_ground_truth` group), label/scene rows with explicit insufficient-data notes, navigation/risk/temporal statistics (transition consistency invariant, escalation counting, direction flips), no-causal-language check, report roles/determinism/limitations, pair evaluation with overlap rejection, markdown/CSV content, and full CLI behavior including exit codes.
+
+### Verified
+- 343/343 hardware-free pytest suite (284 pre-existing + 59 analysis). 10k-record synthetic benchmark: load ≈ 120 ms, analysis ≈ 80 ms, report build < 1 ms, JSON+CSV+MD writes ≈ 4 ms.
+- End-to-end smoke: replay output → JSONL records + event trace → CLI → deterministic JSON/Markdown/CSV report (accuracy honestly `n/a` without ground truth; navigation summary descriptive).
+- SIMULATION-VALIDATED / SOFTWARE-VALIDATED only. **Real OAK-D hardware validation remains blocked** (Phase 9 Checkpoint A not performed); nothing here claims hardware, measurement, system or safety validation.
+
+---
+
 ## - 2026-09-14 (Offline Measurement & Evaluation Infrastructure — hardware parked)
 ### Added
 - **Measurement record schema** (`evaluation/record.py`): one immutable `MeasurementRecord` per (frame, object) observation — scene_id, frame_id, timestamp, track_id, label, confidence, bbox, region, predicted_distance_m, distance_provenance, distance_source, ground_truth_distance_m — with JSONL round-trip, CSV form and strict deserialization (unknown provenance / bad bbox / newer schema rejected). Ground truth is a separate field and is never fabricated: missing truth stays `None`, never 0.
