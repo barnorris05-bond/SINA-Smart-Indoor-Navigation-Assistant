@@ -44,7 +44,9 @@ def main():
     audio = AudioManager()
     # Phase B: mock depth provider (SIMULATED distances) until real
     # stereo is validated; swap happens in depth/provider_factory.py.
-    fusion = create_distance_fusion()
+    # Phase 9: camera_manager is passed so USE_MOCK_DEPTH=False selects
+    # the real OakStereoDepthProvider (ignored in mock mode).
+    fusion = create_distance_fusion(camera_manager=camera)
     fusion.start()
     fps_counter = FPS()
 
