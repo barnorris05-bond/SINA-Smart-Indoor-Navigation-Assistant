@@ -260,3 +260,61 @@ load ≈ 120 ms · analyze ≈ 80 ms · report build < 1 ms · markdown < 1 ms
 
 Until step 1 passes on hardware, all evaluation results are
 SIMULATION-VALIDATED at best.
+
+## Phase 10 preparation: calibration experiment framework
+
+**Status: SOFTWARE-VALIDATED (unit tests) / SIMULATION-VALIDATED
+(synthetic fixtures) only.** Real OAK-D measurement calibration remains
+blocked pending Phase 9 hardware validation. Nothing here claims
+distance accuracy, calibration generalization, or safety.
+
+The `calibration/` package implements the gated experiment workflow
+that will consume REAL MEASURED observations when they exist:
+
+```
+KNOWN PHYSICAL DISTANCE (operator ground truth)
+    -> REAL OAK-D MEASUREMENT (MEASURED; Phase 9+, BLOCKED)
+    -> MeasurementRecord (reused verbatim from evaluation/)
+    -> CalibrationExperiment.run(calibration, validation)
+           assert_disjoint FIRST (overlap fails loudly, never removed)
+           -> raw baseline metrics (ALWAYS reported, §10)
+           -> candidate fit + selection on CALIBRATION data ONLY (§19)
+           -> FROZEN model (validation stage cannot refit, §20)
+           -> calibrated validation metrics, raw reported alongside
+    -> deterministic experiment report (JSON / Markdown)
+```
+
+### Components
+
+| module | purpose |
+|---|---|
+| `calibration/session.py` | `ExperimentSession` — opt-in metadata (device, DepthAI version, resolutions, lighting, operator notes). Unknown values stay `None`; unknown fields rejected on load. |
+| `calibration/plan.py` | `TargetDistancePlan` — deterministic capture schedule (targets × repetitions). Targets are **EXPERIMENT TARGETS**, not navigation/safety thresholds (AST-enforced: the package imports nothing from `navigation`). |
+| `calibration/coverage.py` | distance/scene/label/track coverage; requested targets kept **separate** from observed ground truth; availability (invalid rate) by distance/label/scene/provenance. |
+| `calibration/diagnostics.py` | repeatability (per-target spread; below `min_samples` groups flagged `insufficient`, no statistics); descriptive outlier report; `filter_outliers()` — auditable only (rule + counts + before/after MAE; raw data never mutated). |
+| `calibration/models.py` | `CalibrationModel` interface; `IdentityCalibration` (the baseline); `AffineCalibration` (closed-form least squares). `fit()` returns a `FrozenCalibrationModel` with **no refit path**. Fitted transforms map provenance to explicit `MEASURED_CALIBRATED` / `SIMULATED_CALIBRATED` labels — a corrected value can never masquerade as a raw sensor measurement. Candidate selection: lowest MAE on calibration data; tie → fewer parameters; tie → first registered. Validation data is structurally absent from selection. |
+| `calibration/experiment.py` | `CalibrationExperiment.run()` — the gated pipeline above; `CalibratedObservation` keeps raw **and** calibrated values side by side (§8); inputs never mutated. |
+| `calibration/reporting.py` | deterministic JSON report (16 sections) + Markdown renderer + validation classification. |
+
+### Future protocol (gated — do not skip steps)
+
+1. Phase 9 Checkpoint A passes on hardware (still BLOCKED).
+2. For each `TargetDistancePlan` target: place target at known
+   distance, capture ≥ `repetitions` observations per scene
+   (`MeasurementRecorder`), record an `ExperimentSession`.
+3. Measure ground truth manually; `attach_truth()` by identity key.
+4. Split observations into CALIBRATION and **independent** VALIDATION
+   sets (different scenes/frames — never the same observations).
+5. `CalibrationExperiment(candidates=[...]).run(calib, val)`;
+   compare frozen-model validation metrics against the raw baseline.
+6. Only `MEASURED`-derived rows support real accuracy conclusions;
+   synthetic fixtures remain SIMULATION-VALIDATED forever.
+
+With no candidates supplied, the experiment is baseline-only — the
+uncalibrated numbers are always on the record first (§10).
+
+### Performance (measured, synthetic 9,984-record dataset)
+
+fit + selection + both evaluations ≈ 92 ms · report ≈ 36 ms ·
+repeatability ≈ 4 ms · availability ≈ 10 ms · outlier filter ≈ 5 ms.
+No optimization needed.
