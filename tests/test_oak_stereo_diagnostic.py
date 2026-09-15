@@ -22,7 +22,8 @@ in this process only, never in the repository default.
 
 Exit codes:
   0 = CHECKPOINT A PASSED (hardware functionality validated)
-  1 = FAIL (device present but stereo did not meet criteria)
+  1 = FAIL (device present but USB/stereo criteria not met — includes
+      the §4 USB gate: USB 2.0-class operation is a hard failure)
   2 = NO DEVICE (OAK-D not connected — HARDWARE BLOCKED, not a code
       failure; never retried in a loop)
 """
@@ -48,6 +49,12 @@ from depth.validity import validate_depth_frame, measure_region
 
 # Central 100x100 of the 640x400 RGB frame (reference region).
 CENTER_BBOX = (270, 150, 370, 250)
+
+# Phase 13 §4 USB gate: PASS requires USB 3.x-class (SUPER) operation.
+# USB 2.0 (HIGH) or below is a HARD FAILURE — stereo streaming over USB 2
+# previously produced X_LINK_ERROR on this host. Not a safety threshold:
+# a hardware bring-up gate only.
+USB3_SPEED_TOKEN = "SUPER"    # matches UsbSpeed.SUPER / SUPER_PLUS
 
 MIN_DEPTH_FPS = 8.0          # dev/test gate: below ~half target -> FAIL
 MIN_VALID_RATIO = 0.05       # dev/test gate: depth effectively empty below this
@@ -79,6 +86,16 @@ def print_device_info() -> None:
         print(f"[device] info query failed: {error}")
 
 
+def query_usb_speed(info) -> str:
+    """One short-lived Device open; return the runtime USB speed string."""
+    try:
+        with dai.Device(info) as dev:
+            return str(dev.getUsbSpeed())
+    except Exception as error:
+        print(f"[usb] speed query failed: {error}")
+        return "UNKNOWN"
+
+
 def main() -> int:
     args = sys.argv[1:]
     measure_seconds = 10.0
@@ -100,6 +117,17 @@ def main() -> int:
         return 2
     print(f"[preflight] {len(devices)} device(s) found; using the first.")
     print_device_info()
+
+    # ---- §4: USB GATE — one read, no retry. USB 2.0-class = hard fail --
+    usb_speed = query_usb_speed(devices[0])
+    print(f"[usb] gate: reported speed = {usb_speed}")
+    if USB3_SPEED_TOKEN not in usb_speed:
+        print("[FAIL] USB GATE: USB 3.x-class operation not confirmed.")
+        print(f"       reported speed: {usb_speed} (need UsbSpeed.SUPER+)")
+        print("       Use a USB 3 port and a USB 3 data cable, directly on")
+        print("       the host — no hubs, no extension cords.")
+        print("       HARDWARE BLOCKED — NO VALIDATION PERFORMED.")
+        return 1
 
     # ---- §5.3: minimal stereo pipeline via production CameraManager ---
     camera = CameraManager()
