@@ -29,6 +29,16 @@ COLLECTABLE = {
     "test_depth_validity.py",
     "test_mock_depth_stack.py",
     "test_object_tracker.py",
+    "test_motion_estimator.py",
+    "test_risk_estimator.py",
+    "test_temporal_navigator.py",
+    "test_oak_provider.py",
+    "test_evaluation_infra.py",
+    "test_evaluation_analysis.py",
+    "test_calibration_framework.py",
+    "test_capture_protocol.py",
+    "test_synthetic_calibration_campaign.py",
+    "test_measurement_contract.py",
     "test_pipeline_mock_e2e.py",
 }
 
